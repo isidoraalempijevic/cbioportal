@@ -217,14 +217,19 @@ p <- ggplot(df_plot_group_sample, aes(x = Aggressiveness, y = Percentage, fill =
                     name = "Mutation Status") +
   scale_pattern_manual(values = c("Aggressive" = "stripe", "Non-aggressive" = "none"),
                        name = "Aggressiveness",
-                       guide = "legend") +  # keep this legend
-  guides(fill = guide_legend(override.aes = list(pattern = "none"))) +  # remove hatch from fill legend
+                       guide = "legend") +
+  guides(fill = guide_legend(override.aes = list(pattern = "none"))) +
   ylim(0, 100) +
   labs(title = "Mutations by sample aggressiveness in melanoma samples",
        x = "Aggressiveness", y = "Percentage (%)") +
   facet_wrap(~ hugoGeneSymbol) +
   theme_minimal(base_size = 14) +
-  theme(plot.title = element_text(size = 20, face = "bold"))
+  theme(
+    plot.title = element_text(size = 20, face = "bold"),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.key.size = unit(1.2, "cm")  # increase key size
+  )
 
 # Display the plot
 print(p)
@@ -544,14 +549,18 @@ write_xlsx(global_fisher,
 # =========================
 # 8. Mutation Percentage by Aggressiveness (sample-level), FAM46 family
 # =========================
+
+# Define genes of interest
 genes_of_interest <- c("TENT5C", "TENT5A", "TENT5B", "TENT5D", "OAZ1", "SRP14", "TBP", "RPL13A", "TP53", "KRAS", "PIK3CA", "APC")
 
+# Total samples per aggressiveness group
 total_samples_group <- all_mutations %>%
   select(sampleId) %>%
   distinct() %>%
   left_join(sample_aggressiveness, by = "sampleId") %>%
   count(Aggressiveness, name = "total_samples")
 
+# Mutated samples per gene and group
 mut_samples_group <- all_mutations %>%
   filter(hugoGeneSymbol %in% genes_of_interest) %>%
   select(sampleId, hugoGeneSymbol) %>%
@@ -559,21 +568,20 @@ mut_samples_group <- all_mutations %>%
   left_join(sample_aggressiveness, by = "sampleId") %>%
   count(Aggressiveness, hugoGeneSymbol, name = "mut_samples")
 
-df_group_sample <- left_join(total_samples_group, mut_samples_group, 
-                             by = "Aggressiveness") %>%
+# Merge and calculate percentages
+df_group_sample <- left_join(total_samples_group, mut_samples_group, by = "Aggressiveness") %>%
   mutate(mut_samples = ifelse(is.na(mut_samples), 0, mut_samples),
          perc_mut = mut_samples / total_samples * 100,
          perc_non_mut = 100 - perc_mut)
 
+# Reshape for plotting
 df_plot_group_sample <- df_group_sample %>%
-  pivot_longer(cols = c("perc_mut","perc_non_mut"),
+  pivot_longer(cols = c("perc_mut", "perc_non_mut"),
                names_to = "Category", values_to = "Percentage") %>%
   mutate(Category = recode(Category,
                            perc_mut = "Mutation",
-                           perc_non_mut = "No mutation"))
-
-df_plot_group_sample <- df_overall %>%
-  mutate(hugoGeneSymbol = recode(hugoGeneSymbol,
+                           perc_non_mut = "No mutation"),
+         hugoGeneSymbol = recode(hugoGeneSymbol,
                                  "TENT5A" = "FAM46A",
                                  "TENT5B" = "FAM46B",
                                  "TENT5C" = "FAM46C",
@@ -593,14 +601,19 @@ p <- ggplot(df_plot_group_sample, aes(x = Aggressiveness, y = Percentage, fill =
                     name = "Mutation Status") +
   scale_pattern_manual(values = c("Aggressive" = "stripe", "Non-aggressive" = "none"),
                        name = "Aggressiveness",
-                       guide = "legend") +  # keep this legend
-  guides(fill = guide_legend(override.aes = list(pattern = "none"))) +  # remove hatch from fill legend
+                       guide = "legend") +
+  guides(fill = guide_legend(override.aes = list(pattern = "none"))) +
   ylim(0, 100) +
   labs(title = "Mutations by sample aggressiveness in melanoma samples",
        x = "Aggressiveness", y = "Percentage (%)") +
   facet_wrap(~ hugoGeneSymbol) +
   theme_minimal(base_size = 14) +
-  theme(plot.title = element_text(size = 20, face = "bold"))
+  theme(
+    plot.title = element_text(size = 20, face = "bold"),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.key.size = unit(1.5, "cm")
+  )
 
 # Display the plot
 print(p)
