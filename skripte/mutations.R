@@ -3,9 +3,8 @@
 # ======================================
 
 # ---- Loading the data ----
-lung <- read.csv("~/cBioPostal data final/lung_fin.csv")
+
 melanoma <- read.csv("~/cBioPostal data final/melanoma_fin.csv")
-prostate <- read.csv("~/cBioPostal data final/prostate_fin.csv")
 
 # ---- Library ----
 library(tidyr)
@@ -16,12 +15,11 @@ library(writexl)
 library(ggplot2)
 
 # ---- Addint columns about cancer type ----
-lung            <- lung            |> mutate(Cancer = "Lung_Cancer")
-prostate        <- prostate        |> mutate(Cancer = "Prostate_Cancer")
+
 melanoma        <- melanoma        |> mutate(Cancer = "Melanoma")
 
 # ---- Making one data frame ----
-combined <- bind_rows(lung, melanoma, prostate)
+combined <- melanoma
 
 # ---- Tyding data and adding annotations ----
 
@@ -58,6 +56,8 @@ p <- ggplot() +
     plot.title = element_text(size = 20, face = "bold") 
   )
 
+print(p)
+
 ggsave("mutations_maped_protein.png", plot = p, width = 14, height = 12, dpi = 300)
 
 
@@ -74,6 +74,8 @@ p <- ggplot() +
   theme(
     plot.title = element_text(size = 20, face = "bold")
   )
+
+print(p)
 
 ggsave("density_maped_protein.png", plot = p, width = 14, height = 12, dpi = 300)
 
@@ -112,22 +114,36 @@ write_xlsx(fisher_df, "fisher_sub_protein.xlsx")
 
 # 4) Percentage of Samples with ≥1 FAM46C Mutation by Protein Domain
 
+# Count samples per protein domain and aggressiveness
 df_percent_protein <- combined %>%
   distinct(Sample.ID, Protein_domain, Aggressiveness) %>%
-  count(Protein_domain, Aggressiveness, name = "n_samples") %>%
-  mutate(Percent = n_samples / total_samples * 100)
+  count(Protein_domain, Aggressiveness, name = "n_samples")
 
+# Total samples per aggressiveness group
+total_samples_group <- combined %>%
+  distinct(Sample.ID, Aggressiveness) %>%
+  count(Aggressiveness, name = "total_group")
+
+# Normalize within each group
+df_percent_protein <- df_percent_protein %>%
+  left_join(total_samples_group, by = "Aggressiveness") %>%
+  mutate(Percent = n_samples / total_group * 100)
+
+# Plot
 p <- ggplot(df_percent_protein, aes(x = Protein_domain, y = Percent, fill = Aggressiveness)) +
   geom_bar(stat = "identity", position = "dodge") +
   labs(
     title = "Percentage of Samples with ≥1 FAM46C Mutation by Protein Domain",
-    x = "Protein Domain", y = "% of Distinct Samples", fill = "Aggressiveness"
+    x = "Protein Domain", y = "% within Aggressiveness Group", fill = "Aggressiveness"
   ) +
   scale_fill_manual(values = c("Aggressive" = "#4D4D4D", "Less_aggressive" = "#C0C0C0")) +
   theme_minimal(base_size = 14) +
   theme(
     plot.title = element_text(size = 20, face = "bold")
   )
+
+# Display the plot
+print(p)
 
 ggsave("percentage_maped_protein.png", plot = p, width = 14, height = 16, dpi = 300)
 
@@ -195,16 +211,28 @@ fisher_df <- data.frame(
 write_xlsx(fisher_df, "fisher_gene.xlsx")
 
 # 4) Percentage of Samples with ≥1 FAM46C Mutation by Transcript Region
+
+# Count samples per transcript region and aggressiveness group
 df_percent_cDNA <- combined %>%
   distinct(Sample.ID, Domain, Aggressiveness) %>%
-  count(Domain, Aggressiveness, name = "n_samples") %>%
-  mutate(Percent = n_samples / total_samples * 100)
+  count(Domain, Aggressiveness, name = "n_samples")
 
+# Total samples per aggressiveness group
+total_samples_group <- combined %>%
+  distinct(Sample.ID, Aggressiveness) %>%
+  count(Aggressiveness, name = "total_group")
+
+# Normalize within each group
+df_percent_cDNA <- df_percent_cDNA %>%
+  left_join(total_samples_group, by = "Aggressiveness") %>%
+  mutate(Percent = n_samples / total_group * 100)
+
+# Plot
 p <- ggplot(df_percent_cDNA, aes(x = Domain, y = Percent, fill = Aggressiveness)) +
   geom_bar(stat = "identity", position = "dodge") +
   labs(
     title = "Percentage of Samples with ≥1 FAM46C Mutation by Transcript Region",
-    x = "Transcript Region", y = "% of Distinct Samples", fill = "Aggressiveness"
+    x = "Transcript Region", y = "% within Aggressiveness Group", fill = "Aggressiveness"
   ) +
   scale_fill_manual(values = c("Aggressive" = "#4D4D4D", "Less_aggressive" = "#C0C0C0")) +
   theme_minimal(base_size = 14) +
@@ -212,12 +240,16 @@ p <- ggplot(df_percent_cDNA, aes(x = Domain, y = Percent, fill = Aggressiveness)
     plot.title = element_text(size = 20, face = "bold")
   )
 
+# Display the plot
+print(p)
+
 ggsave("percentage_maped_gene.png", plot = p, width = 14, height = 16, dpi = 300)
 
 # ======================================
 # Analysis of C-terminal (sample-based)
 # ======================================
 
+# Flag samples with at least one C-terminal mutation
 sample_cterm_flags <- combined %>%
   mutate(C_terminal_flag = Protein.Position > 343) %>%
   group_by(Sample.ID, Aggressiveness) %>%
@@ -226,27 +258,42 @@ sample_cterm_flags <- combined %>%
     .groups = "drop"
   )
 
-# Percentage
+# Count samples by aggressiveness and mutation status
 c_terminal_counts <- sample_cterm_flags %>%
   count(Aggressiveness, has_C_terminal, name = "n_samples")
 
-df_cterm_plot <- c_terminal_counts %>%
-  filter(has_C_terminal) %>%
-  mutate(Percent = n_samples / total_samples * 100)
+# Total samples per aggressiveness group
+total_samples_group <- sample_cterm_flags %>%
+  count(Aggressiveness, name = "total_group")
 
+# Normalize within each group
+df_cterm_plot <- c_terminal_counts %>%
+  left_join(total_samples_group, by = "Aggressiveness") %>%
+  mutate(Percent = n_samples / total_group * 100)
+
+# View result
 print(df_cterm_plot)
 
-p <- ggplot(df_cterm_plot, aes(x = Aggressiveness, y = Percent, fill = Aggressiveness)) +
+# Filter to show only samples with C-terminal mutations
+df_cterm_plot_filtered <- df_cterm_plot %>%
+  filter(has_C_terminal)
+
+# Create the plot
+p <- ggplot(df_cterm_plot_filtered, aes(x = Aggressiveness, y = Percent, fill = Aggressiveness)) +
   geom_bar(stat = "identity", width = 0.6) +
   scale_fill_manual(values = c("Aggressive" = "#4D4D4D", "Less_aggressive" = "#C0C0C0")) +
   labs(
-    title = "Percentage of samples with ≥1 C-terminal (aa>343) Mutation",
-    x = "Aggressiveness", y = "% of Distinct Samples"
+    title = "Percentage of Samples with ≥1 C-terminal (aa > 343) Mutation",
+    x = "Aggressiveness", y = "% within Aggressiveness Group"
   ) +
   theme_minimal(base_size = 14) +
   theme(
-    plot.title = element_text(size = 20, face = "bold")
+    plot.title = element_text(size = 20, face = "bold"),
+    legend.position = "none"
   )
+
+# Display the plot
+print(p)
 
 ggsave("percentage_cterm.png", plot = p, width = 14, height = 16, dpi = 300)
 
@@ -325,39 +372,6 @@ pap_sites <- c(77, 290, 298, 72)
 pap <- combined %>% filter(Protein.Position %in% pap_sites)
 write_xlsx(pap, "roi_conserved_sites.xlsx")
 
-# ======================================
-# Shared mutations
-# ======================================
-
-mutations_info <- combined %>%
-  filter(!is.na(Protein.Change), !is.na(Cancer), !is.na(Aggressiveness)) %>%
-  select(Protein.Change, Cancer, Aggressiveness) %>%
-  distinct()
-
-shared_mutations_by_group <- mutations_info %>%
-  group_by(Protein.Change) %>%
-  summarise(
-    cancer_types = paste(unique(Cancer), collapse = ", "),
-    n_cancer_types = n_distinct(Cancer),
-    aggressiveness_levels = paste(unique(Aggressiveness), collapse = ", "),
-    .groups = "drop"
-  ) %>%
-  filter(n_cancer_types > 1)
-
-# Anotacije za zajedničke
-mutation_annotations <- combined %>%
-  select(Protein.Change, Protein_domain, Protein.Position, cDNA_pos, Domain) %>%
-  distinct()
-
-mutation_annotations_unique <- mutation_annotations %>%
-  group_by(Protein.Change) %>%
-  slice(1) %>%
-  ungroup()
-
-shared_mutations_annotated <- shared_mutations_by_group %>%
-  left_join(mutation_annotations_unique, by = "Protein.Change")
-
-write_xlsx(shared_mutations_annotated, "shared_mutations_annotated.xlsx")
 
 # ======================================
 # Samples with > 1 mutations
